@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Counterparty Extraction</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f4f3ef;--surface:#fff;--surface2:#eeede8;--border:#dddbd3;
+  --text:#181816;--text2:#6b6960;--text3:#9b9990;
+  --blue:#1a4fd6;--blue-bg:#edf2ff;
+  --green:#166534;--green-bg:#f0fdf4;
+  --amber:#92400e;--amber-bg:#fffbeb;
+  --red:#991b1b;--red-bg:#fef2f2;
+  --purple:#6d28d9;--purple-bg:#f5f3ff;
+  --slate:#1e293b;--slate-bg:#f8fafc;
+  --mono:'IBM Plex Mono',monospace;
+  --sans:'IBM Plex Sans',system-ui,sans-serif;
+}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh}
+header{background:var(--text);color:#fff;padding:1rem 1.5rem;display:flex;align-items:center;gap:.75rem}
+header h1{font-size:.95rem;font-weight:500}
+header .ver{font-size:.68rem;color:rgba(255,255,255,.35);font-family:var(--mono);margin-left:auto}
+.layout{display:grid;grid-template-columns:440px 1fr;min-height:calc(100vh - 52px)}
+.left{padding:1.5rem;border-right:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;gap:1.25rem}
+.right{padding:1.5rem;overflow-y:auto}
+.slabel{font-size:.67rem;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--text3);margin-bottom:.4rem}
+textarea{width:100%;height:100px;font-family:var(--mono);font-size:.79rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:.7rem;color:var(--text);resize:vertical;outline:none;line-height:1.6;transition:border-color .15s}
+textarea:focus{border-color:var(--blue);background:#fff}
+textarea::placeholder{color:var(--text3)}
+.row{display:flex;align-items:center;gap:.6rem}
+.tid-label{font-size:.71rem;color:var(--text2);white-space:nowrap;font-family:var(--mono)}
+input[type=text]{flex:1;font-family:var(--mono);font-size:.78rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:.45rem .7rem;color:var(--text);outline:none;transition:border-color .15s}
+input[type=text]:focus{border-color:var(--blue);background:#fff}
+.btn{width:100%;padding:.65rem;background:var(--text);color:#fff;border:none;border-radius:6px;font-family:var(--sans);font-size:.85rem;font-weight:500;cursor:pointer;transition:opacity .15s}
+.btn:hover{opacity:.82}.btn:active{opacity:.65}.btn:disabled{opacity:.4;cursor:not-allowed}
+.samples-scroll{flex:1;overflow-y:auto}
+.sg{margin-bottom:.9rem}
+.sg-label{font-size:.63rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);margin-bottom:.3rem}
+.chip{display:inline-block;margin:.15rem;padding:.22rem .5rem;background:var(--bg);border:1px solid var(--border);border-radius:4px;font-family:var(--mono);font-size:.67rem;color:var(--text2);cursor:pointer;transition:all .1s;line-height:1.5}
+.chip:hover{background:var(--blue-bg);border-color:var(--blue);color:var(--blue)}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:220px;color:var(--text3);font-size:.82rem;gap:.35rem}
+.empty .arr{font-size:1.4rem;opacity:.2}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;max-width:700px}
+.hero{padding:1.25rem 1.5rem;border-bottom:1px solid var(--border)}
+.hero .rl{font-size:.63rem;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--text3);margin-bottom:.35rem}
+.hero .name{font-size:1.6rem;font-weight:600;color:var(--text);line-height:1.2;word-break:break-word}
+.badges{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.75rem}
+.badge{display:inline-flex;align-items:center;gap:.3rem;padding:.28rem .65rem;border-radius:4px;font-size:.7rem;font-weight:500}
+.badge .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.fields{padding:0}
+.field{display:grid;grid-template-columns:150px 1fr;padding:.6rem 1.25rem;border-bottom:1px solid var(--border);gap:.6rem;align-items:start}
+.field:last-child{border-bottom:none}
+.fk{font-family:var(--mono);font-size:.67rem;color:var(--text3);padding-top:1px}
+.fv{font-family:var(--mono);font-size:.77rem;color:var(--text);word-break:break-all;line-height:1.5}
+.fv.prose{font-family:var(--sans);font-size:.79rem;color:var(--text2);word-break:normal}
+.fv.whitelisted{color:var(--green);font-weight:500}
+.fv.excluded{color:var(--red);font-weight:500}
+.fv.research{color:var(--amber);font-weight:500}
+.err{background:var(--red-bg);border:1px solid #fca5a5;border-radius:8px;padding:.8rem 1.1rem;color:var(--red);font-size:.8rem}
+.spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:4px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* disposition badge colors */
+.d-WHITELISTED{background:var(--green-bg);color:var(--green)}.dd-WHITELISTED{background:var(--green)}
+.d-EXCLUDED{background:var(--red-bg);color:var(--red)}.dd-EXCLUDED{background:var(--red)}
+.d-REQUIRES_EXTERNAL_RESEARCH{background:var(--amber-bg);color:var(--amber)}.dd-REQUIRES_EXTERNAL_RESEARCH{background:var(--amber)}
+/* entity type */
+.e-BUSINESS{background:var(--blue-bg);color:var(--blue)}.ed-BUSINESS{background:var(--blue)}
+.e-INDIVIDUAL{background:var(--purple-bg);color:var(--purple)}.ed-INDIVIDUAL{background:var(--purple)}
+.e-UNKNOWN{background:var(--slate-bg);color:var(--slate)}.ed-UNKNOWN{background:var(--slate)}
+/* pattern */
+.p-badge{background:var(--surface2);color:var(--text2)}
+
+@media(max-width:780px){.layout{grid-template-columns:1fr}.left{border-right:none;border-bottom:1px solid var(--border)}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Counterparty Extraction</h1>
+  <span class="ver">v3.0.0 · 30 patterns · whitelist + exclusion list loaded</span>
+</header>
+<div class="layout">
+  <div class="left">
+    <div>
+      <div class="slabel">Transaction description</div>
+      <textarea id="desc" placeholder="Paste a NACHA or Helix transaction description..."></textarea>
+      <div class="row" style="margin-top:.55rem">
+        <span class="tid-label">transaction_id</span>
+        <input type="text" id="tid" placeholder="optional">
+      </div>
+      <button class="btn" id="btn" onclick="go()" style="margin-top:.65rem">Extract counterparty</button>
+    </div>
+    <div class="samples-scroll" id="samples"></div>
+  </div>
+  <div class="right" id="panel">
+    <div class="empty"><div class="arr">→</div><div>Pick a sample or paste a description</div></div>
+  </div>
+</div>
+<script>
+const SAMPLES = {
+  "Payment rail":[
+    "CASH APP*JACOB SWIE, 8774174551, CA 94103 US",
+    "PAYPAL*Mayor Marcelo, Visa Direct, CA 95131 US",
+    "DK*DRAFTKINGSTRHG, 6179866744, MA 02116 US",
+  ],
+  "Square & NNT & SY":[
+    "SQ *WILLIE'S TOWING, Windham, ME 04062 US",
+    "NNT KEG LIQUOR     002439, DELANO, CA US",
+    "SY8 PET SUPPLIES PL000810, DALLAS, TX US",
+  ],
+  "Payroll & direct deposit":[
+    "FASTENAL COMPANY DIRECT DEP MARTINEZ,MAURICIO A 684066695103",
+    "ATMOS ENERGY COR PAYROLL JOHN FLETCHER 22110432055",
+    "MISS BECKIES DAY PAYROLL TERPENING, CARMEN N 06119500013716X",
+  ],
+  "Known merchants":[
+    "AMZN Mktp US*HV0NZ9LL0, Amzn.com/bill, WA 98109 US",
+    "AMAZON PRIME*1T4W30R53, 888-802-3080, WA 98109 US",
+  ],
+  "Helix returns & transfers":[
+    "Return of a Deposit from STATE EMPLOYEES CREDIT UNION*9485",
+    "Return of a Withdrawal to CAPITAL ONE N.A.*2757",
+    "Transfer from CITIZENS DEPOSIT BK to Credit Karma Savings",
+  ],
+  "Internal / no counterparty":[
+    "Credit Builder Payment: 17048361",
+    "Telephone Transfer Debit VA/IJL2EX2P0M/5009001831191338",
+  ],
+  "Fixed entity patterns":[
+    "TPG PRODUCTS SBTPG LLC NICHOLE WARD 6D2GQAWF3P45FDI",
+    "Healthme GRFAR",
+    "INDIAN EAGLE PVT CAS-487777",
+    "WAL WAL-MART SUPER 552662, JONESBORO, AR US",
+    "TARGET DEBIT CRD ACH TRAN SMITH,AVERY 912002537656931",
+  ],
+  "Suffix patterns":[
+    "AUTOCAMP JOSHUA VENDOR PMT",
+    "INTUIT 81233715 TRAN FEE",
+    "T-MOBILE RETRY PYMT DYMECIA TOWNS 9209042",
+    "CAPITAL ONE MOBILE PMT DOMINIQUE T DADABO 3GO1F00",
+    "PLANET FIT CLUB FEES PAOLA RAMIREZ 2302401227504",
+    "BRAD PALMER SENDER",
+    "MIGUEL ESGUERRA BUSINESS",
+    "GO MART #52 PURCHASE",
+    "Transfer Out WAKE ORTHO & PED DENTIST",
+  ],
+  "Government & wire":[
+    "STATE OF OHIO TAXREFUNDS BRUMMETT, ALLISON R 0043330301",
+    "IRS  TREAS 310 TAX REF HAZLEY, BRITTNEY R XXXXXXXXX200909",
+    "IMAD # 20230623MMQFMPTQ000043 OMAD # 20230623GMQFMP01008622 Incoming Domestic WireIncoming Wire 66873387 THE PRO VIDENT BANK  211374020 BANKPROV",
+  ],
+  "Standard ACH":[
+    "Green Heron LLC FUND PMTS",
+    "SOUTHERN SCRIPTS EFT194377",
+    "JPMorgan Chase ACCTVERIFY Auth 22628587695",
+  ],
+  "POS card transactions":[
+    "POS Pre-Authorized Debit - DDA DBT CRD 1209 08/29/23 17749965AT&T COR DF 800-331-0500  TX C#1711",
+    "POS Debit - DDA POS DEB 1154 07/28/23 00215197DOLLAR-GENERAL #7132 DG 071321228 COUNTFAIRMONT WV C#4067",
+  ],
+};
+
+const sc = document.getElementById('samples');
+Object.entries(SAMPLES).forEach(([g,items])=>{
+  const d = document.createElement('div'); d.className='sg';
+  d.innerHTML=`<div class="sg-label">${g}</div>`;
+  items.forEach(s=>{
+    const c=document.createElement('span'); c.className='chip';
+    c.textContent=s.length>46?s.slice(0,46)+'…':s; c.title=s;
+    c.onclick=()=>{document.getElementById('desc').value=s;go()};
+    d.appendChild(c);
+  });
+  sc.appendChild(d);
+});
+
+const DISP_LABEL={'WHITELISTED':'Whitelisted','EXCLUDED':'Excluded','REQUIRES_EXTERNAL_RESEARCH':'Requires External Research'};
+
+async function go(){
+  const desc=document.getElementById('desc').value.trim();
+  const tid=document.getElementById('tid').value.trim();
+  const btn=document.getElementById('btn');
+  const panel=document.getElementById('panel');
+  if(!desc){panel.innerHTML='<div class="err">Please enter a transaction description.</div>';return;}
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Extracting...';
+  const body={description:desc}; if(tid) body.transaction_id=tid;
+  try{
+    const res=await fetch('/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await res.json();
+    if(d.error){panel.innerHTML=`<div class="err">${d.error}</div>`;return;}
+    const disp=d.disposition||'REQUIRES_EXTERNAL_RESEARCH';
+    const ent=d.entity_type||'UNKNOWN';
+    const pat=d.pattern_name||'';
+    let dispClass='research';
+    if(disp==='WHITELISTED') dispClass='whitelisted';
+    if(disp==='EXCLUDED') dispClass='excluded';
+    panel.innerHTML=`
+      <div class="card">
+        <div class="hero">
+          <div class="rl">Counterparty</div>
+          <div class="name">${d.counterparty||'—'}</div>
+          <div class="badges">
+            <span class="badge d-${disp}"><span class="dot dd-${disp}"></span>${DISP_LABEL[disp]||disp}</span>
+            <span class="badge e-${ent}"><span class="dot ed-${ent}"></span>${ent}</span>
+            <span class="badge p-badge">${pat}</span>
+          </div>
+        </div>
+        <div class="fields">
+          <div class="field"><span class="fk">pattern</span><span class="fv prose">${d.pattern_description||''}</span></div>
+          ${d.canonical_name?`<div class="field"><span class="fk">canonical name</span><span class="fv whitelisted">${d.canonical_name}</span></div>`:''}
+          ${d.sector&&d.sector!='None'?`<div class="field"><span class="fk">sector</span><span class="fv">${d.sector}</span></div>`:''}
+          ${d.transaction_id?`<div class="field"><span class="fk">transaction_id</span><span class="fv">${d.transaction_id}</span></div>`:''}
+          <div class="field"><span class="fk">raw input</span><span class="fv">${d.raw}</span></div>
+        </div>
+      </div>`;
+  }catch(e){
+    panel.innerHTML='<div class="err">Cannot reach the API. Make sure the server is running.</div>';
+  }finally{btn.disabled=false;btn.innerHTML='Extract counterparty';}
+}
+document.getElementById('desc').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey))go();});
+</script>
+</body>
+</html>
