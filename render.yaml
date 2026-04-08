@@ -5,6 +5,8 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
       - key: EXCLUSION_LIST_PATH
         value: data/Counterparty_Search_Exclusion_List_v9_01_apr.xlsx
       - key: WHITELIST_PATH
