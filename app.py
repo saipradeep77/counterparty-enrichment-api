@@ -75,16 +75,16 @@ def strip_noise(text):
     text = re.sub(r'\s+PRENOTE\s*$', '', text, flags=re.IGNORECASE).strip()
     # Trailing CCD, PPD, WEB keywords
     text = re.sub(r'\s+(CCD|PPD|WEB)\s*$', '', text, flags=re.IGNORECASE).strip()
-    # Trailing alphanumeric reference codes (8+ chars, mix of letters and digits)
-    text = re.sub(r'\s+[A-Z0-9]{8,}\s*$', '', text).strip()
+    # Trailing alphanumeric reference codes (8+ chars, must contain at least one digit)
+    text = re.sub(r'\s+(?=[A-Z0-9]*\d)[A-Z0-9]{8,}\s*$', '', text).strip()
     # Trailing long numbers (6+ digits)
     text = re.sub(r'\s+\d{6,}\s*$', '', text).strip()
     # Trailing short reference codes like AB-1234, WEB123456
     text = re.sub(r'\s+[A-Z]{2,4}-?\d{4,}\s*$', '', text).strip()
     # Trailing x+digits pattern (e.g. "x12345", "xx1234")
     text = re.sub(r'\s+x+\d+\s*$', '', text, flags=re.IGNORECASE).strip()
-    # Trailing mixed-case alphanumeric codes (e.g. "dffd66669837425", "IW8N48XGB")
-    text = re.sub(r'\s+[a-zA-Z0-9]{8,}\s*$', '', text).strip()
+    # Trailing mixed-case alphanumeric codes — must contain at least one digit (e.g. "dffd66669837425", "IW8N48XGB")
+    text = re.sub(r'\s+(?=[a-zA-Z0-9]*\d)[a-zA-Z0-9]{8,}\s*$', '', text).strip()
     # Trailing 4-5 digit numbers (store/ref numbers at end)
     text = re.sub(r'\s+\d{4,5}\s*$', '', text).strip()
     # Dollar amounts (e.g. "$33.71", "$-40.00")
@@ -102,6 +102,9 @@ def clean_counterparty(text):
     text = re.sub(r'\s*#\s*\d+\b', '', text).strip()  # mid-string store numbers
     # Strip bare trailing 4-5 digit store numbers after merchant name
     text = re.sub(r'\s+\d{4,5}\s*$', '', text).strip()
+    # Strip short embedded alphanumeric codes (e.g. "776A8" between words)
+    text = re.sub(r'\s+\d+[A-Z]\d*\s+', ' ', text).strip()
+    text = re.sub(r'\s+[A-Z]\d+[A-Z]\d*\s+', ' ', text).strip()
     # Strip embedded phone numbers (10-digit: 8888081723, or formatted)
     text = re.sub(r'\s+\d{10}\b', '', text).strip()
     text = re.sub(r',?\s*\(?\d{3}\)?[-.\s]?\d{3,4}[-.\s]?\d{4}', '', text).strip()
@@ -112,8 +115,9 @@ def clean_counterparty(text):
     # Strip masked SSN/account: XXXXX1234, *****3237
     text = re.sub(r'\s+[X*]{3,}\d*[-\d]*\s*$', '', text, flags=re.IGNORECASE).strip()
     # Strip trailing alphanumeric reference codes (CC231013417, W7210, etc.)
+    # Must contain at least one digit — pure alpha words like TURBOTAX are business names
     text = re.sub(r'\s+[A-Z]{1,3}\d{4,}\s*$', '', text).strip()
-    text = re.sub(r'\s+[A-Z0-9]{8,}\s*$', '', text).strip()
+    text = re.sub(r'\s+(?=[A-Z0-9]*\d)[A-Z0-9]{8,}\s*$', '', text).strip()
     # Strip trailing long digit sequences
     text = re.sub(r'\s+\d{5,}\s*$', '', text).strip()
     # Strip dollar amounts and surcharge/cash back
@@ -132,6 +136,8 @@ def clean_counterparty(text):
             if p and not p.isdigit():
                 text = p
                 break
+    # Strip trailing punctuation remnants (& , . ;)
+    text = re.sub(r'[\s&,;.]+$', '', text).strip()
     # Collapse multiple spaces
     text = re.sub(r'\s{2,}', ' ', text).strip()
     return text
@@ -181,6 +187,7 @@ GOV_PATTERNS = [
     r'^US DEPT',r'^DEPT OF',r'^CTDOL\b',r'^TN UI\b',
     r'^NY STATE\b',r'^VA DEPT\b',r'^Georgia Dep',r'^NM\s+\w+\s+COUNTY',
     r'^[A-Z]{2}\s+DEPT\s+(OF\s+)?',
+    r'^[A-Z]{2}TREASURY\b',  # WVTREASURY, etc.
 ]
 
 # pattern_name -> (plain_english_name, description)
@@ -412,8 +419,10 @@ def extract(raw: str, transaction_id=None) -> dict:
     m = re.match(r'^(.+?)\s+DIR(?:ECT)?\s+DEP\b', s, re.IGNORECASE)
     if m: return ret(strip_noise(m.group(1).strip()), 'PAYROLL_DIRECT_DEPOSIT')
 
-    # 17. Payroll
-    m = re.match(r'^(.+?)\s+(?:OFF ?CYCLE\s+)?PAYROLL\b', s, re.IGNORECASE)
+    # 17. Payroll — also matches PPDPAYROLL, SCHOOL PR, PYRL
+    m = re.match(r'^(.+?)\s+(?:OFF ?CYCLE\s+)?(?:PPD)?PAYROLL\b', s, re.IGNORECASE)
+    if m: return ret(strip_noise(m.group(1).strip()), 'PAYROLL_DEPOSIT')
+    m = re.match(r'^(.+?)\s+(?:SCHOOL\s+PR|PYRL)\d*\b', s, re.IGNORECASE)
     if m: return ret(strip_noise(m.group(1).strip()), 'PAYROLL_DEPOSIT')
 
     # 18. Retry Payment
@@ -451,7 +460,7 @@ def extract(raw: str, transaction_id=None) -> dict:
     # 26. Government
     for gov in GOV_PATTERNS:
         if re.match(gov, s, re.IGNORECASE):
-            agency = re.split(r'\s+[A-Z]*REFUNDS?\b|\s+TAXREFUNDS?\b|\s+UNEMP\b|\s+DE DOR\b|\s+BENEFITS\b|\s+CHILDCTC\b|\s+TAX REF(?:UND)?\b|\s+WITHDRAWAL\b|\s+[A-Z]*STTAXRFD\b', s, flags=re.IGNORECASE)[0]
+            agency = re.split(r'\s+[A-Z]*REFUNDS?\b|\s+TAXREFUNDS?\b|\s+UNEMP\b|\s+DE DOR\b|\s+BENEFITS\b|\s+CHILDCTC\b|\s+TAX REF(?:UND)?\b|\s+WITHDRAWAL\b|\s+[A-Z]{2,}STTAXRFD\b|\s+[A-Z]{2,}TAXPYMT\b|\s+USATAXPYMT\b', s, flags=re.IGNORECASE)[0]
             return ret(strip_noise(agency.strip()), 'GOVERNMENT_PAYMENT')
 
     # 27. POS / DDA
