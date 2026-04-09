@@ -75,6 +75,24 @@ input[type=text]:focus{border-color:var(--blue);background:#fff}
 /* pattern */
 .p-badge{background:var(--surface2);color:var(--text2)}
 
+/* Upload section */
+.upload-section{margin-top:.5rem;border-top:1px solid var(--border);padding-top:1rem}
+.upload-zone{border:2px dashed var(--border);border-radius:8px;padding:1.5rem 1rem;text-align:center;cursor:pointer;transition:all .2s;background:var(--bg)}
+.upload-zone:hover,.upload-zone.dragover{border-color:var(--blue);background:var(--blue-bg)}
+.upload-zone .uz-icon{font-size:1.5rem;opacity:.3;margin-bottom:.3rem}
+.upload-zone .uz-text{font-size:.78rem;color:var(--text2)}
+.upload-zone .uz-hint{font-size:.65rem;color:var(--text3);margin-top:.3rem}
+.upload-file-input{display:none}
+.upload-status{margin-top:.6rem;font-size:.75rem;color:var(--text2);font-family:var(--mono)}
+.upload-progress{width:100%;height:4px;background:var(--surface2);border-radius:2px;margin-top:.4rem;overflow:hidden}
+.upload-progress-bar{height:100%;background:var(--blue);border-radius:2px;transition:width .3s;width:0}
+.upload-result{margin-top:.6rem;display:flex;flex-direction:column;gap:.4rem}
+.download-btn{display:inline-flex;align-items:center;gap:.4rem;padding:.5rem .9rem;background:var(--green);color:#fff;border:none;border-radius:6px;font-family:var(--sans);font-size:.78rem;font-weight:500;cursor:pointer;transition:opacity .15s;text-decoration:none}
+.download-btn:hover{opacity:.82}
+.sample-link{font-size:.68rem;color:var(--blue);text-decoration:none;font-family:var(--mono)}
+.sample-link:hover{text-decoration:underline}
+.upload-stats{font-size:.7rem;color:var(--text2);font-family:var(--mono);line-height:1.6}
+
 @media(max-width:780px){.layout{grid-template-columns:1fr}.left{border-right:none;border-bottom:1px solid var(--border)}}
 </style>
 </head>
@@ -93,6 +111,21 @@ input[type=text]:focus{border-color:var(--blue);background:#fff}
         <input type="text" id="tid" placeholder="optional">
       </div>
       <button class="btn" id="btn" onclick="go()" style="margin-top:.65rem">Extract counterparty</button>
+    </div>
+    <div class="upload-section">
+      <div class="slabel">Bulk file upload</div>
+      <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+        <div class="uz-icon">&#8593;</div>
+        <div class="uz-text">Drop .xlsx or .csv here, or click to browse</div>
+        <div class="uz-hint">File must have a "description" column</div>
+      </div>
+      <input type="file" id="fileInput" class="upload-file-input" accept=".xlsx,.xls,.csv">
+      <div style="margin-top:.4rem;text-align:right">
+        <a href="/sample" class="sample-link">&#8595; Download sample file (1,500 rows)</a>
+      </div>
+      <div id="uploadStatus" class="upload-status" style="display:none"></div>
+      <div class="upload-progress" id="uploadProgress" style="display:none"><div class="upload-progress-bar" id="uploadBar"></div></div>
+      <div id="uploadResult" class="upload-result" style="display:none"></div>
     </div>
     <div class="samples-scroll" id="samples"></div>
   </div>
@@ -221,6 +254,63 @@ async function go(){
   }finally{btn.disabled=false;btn.innerHTML='Extract counterparty';}
 }
 document.getElementById('desc').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey))go();});
+
+// ─── Bulk Upload ───
+const dropZone=document.getElementById('dropZone');
+const fileInput=document.getElementById('fileInput');
+const uploadStatus=document.getElementById('uploadStatus');
+const uploadProgress=document.getElementById('uploadProgress');
+const uploadBar=document.getElementById('uploadBar');
+const uploadResult=document.getElementById('uploadResult');
+
+['dragenter','dragover'].forEach(ev=>dropZone.addEventListener(ev,e=>{e.preventDefault();dropZone.classList.add('dragover')}));
+['dragleave','drop'].forEach(ev=>dropZone.addEventListener(ev,e=>{e.preventDefault();dropZone.classList.remove('dragover')}));
+dropZone.addEventListener('drop',e=>{if(e.dataTransfer.files.length)handleFile(e.dataTransfer.files[0])});
+fileInput.addEventListener('change',e=>{if(e.target.files.length)handleFile(e.target.files[0])});
+
+async function handleFile(file){
+  const ext=file.name.split('.').pop().toLowerCase();
+  if(!['xlsx','xls','csv'].includes(ext)){
+    showUploadError('Unsupported format. Please upload .xlsx or .csv');return;
+  }
+  uploadStatus.style.display='block';
+  uploadProgress.style.display='block';
+  uploadResult.style.display='none';
+  uploadBar.style.width='15%';
+  uploadStatus.textContent=`Uploading ${file.name} (${(file.size/1024).toFixed(0)} KB)...`;
+
+  const form=new FormData();
+  form.append('file',file);
+  uploadBar.style.width='30%';
+
+  try{
+    uploadStatus.textContent='Processing — enriching all rows...';
+    uploadBar.style.width='60%';
+    const res=await fetch('/upload',{method:'POST',body:form});
+    if(!res.ok){
+      const err=await res.json();
+      showUploadError(err.error||'Upload failed');return;
+    }
+    uploadBar.style.width='100%';
+    const blob=await res.blob();
+    const url=URL.createObjectURL(blob);
+
+    uploadStatus.textContent='Done!';
+    uploadResult.style.display='flex';
+    uploadResult.innerHTML=`
+      <a href="${url}" download="counterparty_enriched.xlsx" class="download-btn">&#8595; Download enriched file</a>
+      <div class="upload-stats">Enriched file ready — columns added: counterparty, pattern_name, entity_type, disposition, canonical_name, sector</div>
+    `;
+  }catch(e){
+    showUploadError('Cannot reach the API. Make sure the server is running.');
+  }
+}
+function showUploadError(msg){
+  uploadStatus.style.display='none';
+  uploadProgress.style.display='none';
+  uploadResult.style.display='flex';
+  uploadResult.innerHTML=`<div class="err">${msg}</div>`;
+}
 </script>
 </body>
 </html>

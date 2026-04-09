@@ -1,5 +1,5 @@
-from flask import Flask, request, jsonify, send_from_directory
-import re, os, pandas as pd
+from flask import Flask, request, jsonify, send_from_directory, send_file
+import re, os, io, pandas as pd
 
 app = Flask(__name__, static_folder='static')
 
@@ -395,6 +395,70 @@ def extract_route():
                 results.append(extract(item.get('description',''), item.get('transaction_id')))
         return jsonify({'results': results, 'count': len(results)})
     return jsonify({'error': "Provide 'description' or 'transactions'"}), 400
+
+@app.route('/upload', methods=['POST'])
+def upload_route():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
+    f = request.files['file']
+    fname = f.filename.lower()
+
+    # Read uploaded file
+    try:
+        if fname.endswith('.xlsx') or fname.endswith('.xls'):
+            df = pd.read_excel(f)
+        elif fname.endswith('.csv'):
+            df = pd.read_csv(f)
+        else:
+            return jsonify({'error': 'Unsupported format. Please upload .xlsx or .csv'}), 400
+    except Exception as e:
+        return jsonify({'error': f'Could not read file: {str(e)}'}), 400
+
+    df.columns = [c.strip() for c in df.columns]
+
+    # Find the description column (case-insensitive)
+    desc_col = None
+    tid_col = None
+    for c in df.columns:
+        cl = c.lower()
+        if cl in ('description', 'transaction_description', 'trans_description', 'txn_description'):
+            desc_col = c
+        if cl in ('transaction_id', 'trans_id', 'txn_id', 'id'):
+            tid_col = c
+    if desc_col is None:
+        return jsonify({'error': f"No 'description' column found. Columns present: {list(df.columns)}"}), 400
+
+    # Process each row
+    enrichment_cols = ['counterparty', 'pattern_name', 'entity_type', 'disposition', 'canonical_name', 'sector']
+    rows = []
+    for _, row in df.iterrows():
+        desc = str(row[desc_col]).strip() if pd.notna(row[desc_col]) else ''
+        tid = str(row[tid_col]).strip() if tid_col and pd.notna(row.get(tid_col)) else None
+        if desc and desc != 'nan':
+            r = extract(desc, tid)
+            rows.append({col: r.get(col, '') for col in enrichment_cols})
+        else:
+            rows.append({col: '' for col in enrichment_cols})
+
+    enriched = pd.DataFrame(rows)
+    for col in enrichment_cols:
+        df[col] = enriched[col].values
+
+    # Write to xlsx in memory
+    output = io.BytesIO()
+    df.to_excel(output, index=False, engine='openpyxl')
+    output.seek(0)
+
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name='counterparty_enriched.xlsx'
+    )
+
+@app.route('/sample')
+def sample_download():
+    return send_from_directory('static', 'sample_transactions.xlsx', as_attachment=True)
 
 @app.route('/health')
 def health():
