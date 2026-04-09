@@ -348,7 +348,16 @@ def extract(raw: str, transaction_id=None) -> dict:
     # 5. IMAD/OMAD wire
     if re.match(r'^IMAD\s*#', s, re.IGNORECASE):
         m2 = re.search(r'(?:Incoming|Outgoing)\s+(?:Domestic\s+)?Wire\S*\s+\d+\s+(.+?)$', s, re.IGNORECASE)
-        entity = strip_noise(m2.group(1).strip()) if m2 else 'UNKNOWN'
+        if m2:
+            entity = m2.group(1).strip()
+            # Wire strings end with: ENTITY_NAME  ROUTING_NUMBER BANKCODE
+            # Strip trailing routing number (9 digits) and short bank codes
+            entity = re.sub(r'\s+\d{9,}\s+\S+\s*$', '', entity).strip()
+            entity = re.sub(r'\s+\d{6,}\s*$', '', entity).strip()
+            entity = re.sub(r'\s+[A-Z]{4,10}\s*$', '', entity).strip()
+            entity = strip_noise(entity)
+        else:
+            entity = 'UNKNOWN'
         return ret(entity, 'WIRE_TRANSFER')
 
     # 6. Helix Return
