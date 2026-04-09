@@ -12,8 +12,8 @@ WHITELIST_ALIASES = {}       # alias_upper -> {canonical, sector}
 
 def load_lists():
     global EXCLUSION_TERMS, EXCLUSION_REGEX, WHITELIST_ALIASES
-    excl_path = os.environ.get('EXCLUSION_LIST_PATH', 'data/Counterparty_Search_Exclusion_List_v9.xlsx')
-    wl_path   = os.environ.get('WHITELIST_PATH',      'data/counterparty_whitelist_v8.xlsx')
+    excl_path = os.environ.get('EXCLUSION_LIST_PATH', 'data/Counterparty_Search_Exclusion_List_v9_01_apr.xlsx')
+    wl_path   = os.environ.get('WHITELIST_PATH',      'data/counterparty_whitelist_v8_01_apr.xlsx')
 
     if os.path.exists(excl_path):
         df = pd.read_excel(excl_path)
@@ -418,8 +418,9 @@ def stats():
         }
     })
 
+os.makedirs('static', exist_ok=True)
+os.makedirs('data', exist_ok=True)
+load_lists()
+
 if __name__ == '__main__':
-    os.makedirs('static', exist_ok=True)
-    os.makedirs('data', exist_ok=True)
-    load_lists()
     app.run(debug=True, port=5000)
