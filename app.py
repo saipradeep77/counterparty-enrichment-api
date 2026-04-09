@@ -377,10 +377,9 @@ def extract(raw: str, transaction_id=None) -> dict:
     m = re.match(r'^Transfer\s+(Out|In)\s+(.+)$', s, re.IGNORECASE)
     if m: return ret(m.group(2).strip(), 'INTERNAL_TRANSFER')
 
-    # 9. WAL WAL-MART
+    # 9. WAL WAL-MART — always Walmart
     if re.match(r'^WAL\s+WAL-MART', s, re.IGNORECASE):
-        m2 = re.match(r'^(WAL\s+WAL-MART(?:\s+\w+)?)\s+\d+,', s, re.IGNORECASE)
-        return ret(m2.group(1).strip() if m2 else 'WAL WAL-MART', 'WALMART_VARIANT')
+        return ret('WALMART', 'WALMART_VARIANT')
 
     # 10. SY# merchant
     m = re.match(r'^SY\d\s+(.+?)\s+[A-Z]{2,3}\d{4,6},', s)
