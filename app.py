@@ -55,18 +55,108 @@ def load_lists():
 # EXTRACTION HELPERS
 # ─────────────────────────────────────────────
 def strip_location(text):
-    text = re.sub(r',\s*[\w\s]+,\s*[A-Z]{2}\s*\d{0,5}\s*(US|MX)?\s*$', '', text).strip()
-    text = re.sub(r',?\s*\d{3}[-.\s]\d{3}[-.\s]\d{4}', '', text).strip()
-    text = re.sub(r'\s+[A-Z]{2}\s+\d{5}\s+(US|MX)\s*$', '', text).strip()
+    # City, State ZIP Country  (e.g. ", Portland, OR 97214 US")
+    text = re.sub(r',\s*[\w\s\.\-]+,\s*[A-Z]{2}\s*\d{0,5}\s*\d{0,4}\s*(US|CA|MX|UK)?\s*$', '', text).strip()
+    # State ZIP Country without city  (e.g. " OR 97214 US")
+    text = re.sub(r'\s+[A-Z]{2}\s+\d{5}(?:\d{4})?\s+(US|CA|MX|UK)\s*$', '', text).strip()
+    # Bare ", City, ST US" without zip
+    text = re.sub(r',\s*[\w\s\.\-]+,\s*[A-Z]{2}\s+(US|CA|MX|UK)\s*$', '', text).strip()
+    # Phone numbers anywhere: 888-802-3080, 508-4852020, (800) 331-0500, 8004561234
+    text = re.sub(r',?\s*\(?\d{3}\)?[-.\s]?\d{3,4}[-.\s]?\d{4}', '', text).strip()
+    # Trailing ", ST" or ", ST US"
+    text = re.sub(r',\s*[A-Z]{2}\s*(US|CA|MX)?\s*$', '', text).strip()
     return text.strip().rstrip(',').strip()
 
 def strip_noise(text):
+    # Masked SSN / account numbers: XXXXX1234, *****3237, XXXXXXXXX200909
+    text = re.sub(r'\s+[X*]{4,}\d+[-\d]*\s*$', '', text, flags=re.IGNORECASE).strip()
+    text = re.sub(r'\s+\*{4,}\d+\s*$', '', text).strip()
+    # Trailing PRENOTE keyword
+    text = re.sub(r'\s+PRENOTE\s*$', '', text, flags=re.IGNORECASE).strip()
+    # Trailing CCD, PPD, WEB keywords
+    text = re.sub(r'\s+(CCD|PPD|WEB)\s*$', '', text, flags=re.IGNORECASE).strip()
+    # Trailing alphanumeric reference codes (8+ chars, mix of letters and digits)
     text = re.sub(r'\s+[A-Z0-9]{8,}\s*$', '', text).strip()
+    # Trailing long numbers (6+ digits)
     text = re.sub(r'\s+\d{6,}\s*$', '', text).strip()
-    text = re.sub(r'\s+[A-Z]{2,4}-\d+\s*$', '', text).strip()
-    text = re.sub(r'\s+x+\d+\s*(PRENOTE)?\s*$', '', text, flags=re.IGNORECASE).strip()
-    text = re.sub(r'\s+CCD\s*$', '', text).strip()
-    return text.strip()
+    # Trailing short reference codes like AB-1234, WEB123456
+    text = re.sub(r'\s+[A-Z]{2,4}-?\d{4,}\s*$', '', text).strip()
+    # Trailing x+digits pattern (e.g. "x12345", "xx1234")
+    text = re.sub(r'\s+x+\d+\s*$', '', text, flags=re.IGNORECASE).strip()
+    # Trailing mixed-case alphanumeric codes (e.g. "dffd66669837425", "IW8N48XGB")
+    text = re.sub(r'\s+[a-zA-Z0-9]{8,}\s*$', '', text).strip()
+    # Trailing 4-5 digit numbers (store/ref numbers at end)
+    text = re.sub(r'\s+\d{4,5}\s*$', '', text).strip()
+    # Dollar amounts (e.g. "$33.71", "$-40.00")
+    text = re.sub(r',?\s*\$-?[\d,.]+\s*(Surcharge|Cash\s*Back)?\s*$', '', text, flags=re.IGNORECASE).strip()
+    # URLs
+    text = re.sub(r',?\s*https?://\S*', '', text, flags=re.IGNORECASE).strip()
+    return text.strip().rstrip(',').strip()
+
+def clean_counterparty(text):
+    """Final cleanup pass on extracted counterparty name — runs on every result."""
+    if not text or text == 'UNKNOWN':
+        return text
+    # Strip store/location numbers: "#1185", "# 07861", "#12000984"
+    text = re.sub(r'\s*#\s*\d+\s*$', '', text).strip()
+    text = re.sub(r'\s*#\s*\d+\b', '', text).strip()  # mid-string store numbers
+    # Strip bare trailing 4-5 digit store numbers after merchant name
+    text = re.sub(r'\s+\d{4,5}\s*$', '', text).strip()
+    # Strip embedded phone numbers (10-digit: 8888081723, or formatted)
+    text = re.sub(r'\s+\d{10}\b', '', text).strip()
+    text = re.sub(r',?\s*\(?\d{3}\)?[-.\s]?\d{3,4}[-.\s]?\d{4}', '', text).strip()
+    # Strip payment keywords that shouldn't be in the name
+    text = re.sub(r'\s+(WEB PYMT|WEB PMT|EPAY|INS PREM|LOAN PYMNT|PPDPAYROLL|PPD\s*PAYROLL)\b', '', text, flags=re.IGNORECASE).strip()
+    # Strip trailing PRENOTE
+    text = re.sub(r'\s+PRENOTE\s*$', '', text, flags=re.IGNORECASE).strip()
+    # Strip masked SSN/account: XXXXX1234, *****3237
+    text = re.sub(r'\s+[X*]{3,}\d*[-\d]*\s*$', '', text, flags=re.IGNORECASE).strip()
+    # Strip trailing alphanumeric reference codes (CC231013417, W7210, etc.)
+    text = re.sub(r'\s+[A-Z]{1,3}\d{4,}\s*$', '', text).strip()
+    text = re.sub(r'\s+[A-Z0-9]{8,}\s*$', '', text).strip()
+    # Strip trailing long digit sequences
+    text = re.sub(r'\s+\d{5,}\s*$', '', text).strip()
+    # Strip dollar amounts and surcharge/cash back
+    text = re.sub(r',?\s*\$-?[\d,.]+\s*(Surcharge|Cash\s*Back)?\s*$', '', text, flags=re.IGNORECASE).strip()
+    # Strip URLs
+    text = re.sub(r',?\s*https?://\S*', '', text, flags=re.IGNORECASE).strip()
+    # Strip trailing ", ST" or ", ST US" location remnants
+    text = re.sub(r',\s*[A-Z]{2}\s*(US|CA|MX)?\s*$', '', text).strip()
+    # Strip trailing comma
+    text = text.rstrip(',').strip()
+    # Strip "Cashback---" dash-delimited strings
+    if re.match(r'^Cashback---', text, re.IGNORECASE):
+        parts = text.split('---')
+        # Try to find a merchant name in the parts
+        for p in parts[1:]:
+            if p and not p.isdigit():
+                text = p
+                break
+    # Collapse multiple spaces
+    text = re.sub(r'\s{2,}', ' ', text).strip()
+    return text
+
+def strip_person_name(text, pattern):
+    """Strip trailing person/account-holder names from business counterparties.
+    Only for patterns where the entity is a business and a person name follows."""
+    if not text:
+        return text
+    # Patterns: "COMPANY NAME Firstname Lastname REF_CODE"
+    # After strip_noise removes the ref code, we may have "COMPANY NAME Firstname Lastname"
+    # We strip trailing "Firstname Lastname" if it looks like a person name after a business
+    # Only apply to patterns where we know a person name follows the business
+    person_patterns = {
+        'RETRY_PAYMENT', 'MOBILE_PAYMENT', 'MEMBERSHIP_FEE',
+        'STANDARD_ACH', 'UNRECOGNISED'
+    }
+    if pattern not in person_patterns:
+        return text
+    # Match trailing "FirstName LastName" (two capitalized words at end) after known business indicators
+    # But only if the text before it looks like a business (has a keyword or suffix)
+    m = re.match(r'^(.+?(?:LLC|INC|CORP|LTD|CO|BANK|CRD|PAY|INS|DIRECT|PRODUCTS)\.?)\s+[A-Z][a-z]+\s+[A-Z][a-z]+.*$', text, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+    return text
 
 PAYMENT_RAILS = {
     'CASH APP','CASHAPP','PAYPAL','VENMO','ZELLE','APPLE PAY','GOOGLE PAY',
@@ -87,8 +177,10 @@ KNOWN_MERCHANTS = {
 }
 
 GOV_PATTERNS = [
-    r'^STATE OF\s+\w+',r'^IRS\b',r'^Division of',r'^US DEPT',r'^DEPT OF',
-    r'^CTDOL\b',r'^TN UI\b',
+    r'^STATE OF\s+\w+',r'^ST\.?\s+OF\s+\w+',r'^IRS\b',r'^Division of',
+    r'^US DEPT',r'^DEPT OF',r'^CTDOL\b',r'^TN UI\b',
+    r'^NY STATE\b',r'^VA DEPT\b',r'^Georgia Dep',r'^NM\s+\w+\s+COUNTY',
+    r'^[A-Z]{2}\s+DEPT\s+(OF\s+)?',
 ]
 
 # pattern_name -> (plain_english_name, description)
@@ -198,6 +290,8 @@ def extract(raw: str, transaction_id=None) -> dict:
 
     def ret(cp, pat):
         meta = PATTERN_META.get(pat, (pat, ''))
+        # Final cleanup pass on every counterparty
+        cp = strip_person_name(clean_counterparty(cp), pat) if cp and cp != 'UNKNOWN' else cp
         result['counterparty']        = cp
         result['pattern_code']        = pat
         result['pattern_name']        = meta[0]
@@ -209,7 +303,15 @@ def extract(raw: str, transaction_id=None) -> dict:
         result['sector']              = sec
         return result
 
-    # 0. Credit Builder Payment — extract entity name, strip trailing colon and reference number
+    # 0a. Cashback dash-delimited format: Cashback---ID---Merchant---ID---Code
+    if re.match(r'^Cashback---', s, re.IGNORECASE):
+        parts = [p for p in s.split('---') if p]
+        for p in parts[1:]:
+            if p and not p.isdigit() and not p.lower().startswith('cashback'):
+                return ret(p.strip(), 'MERCHANT_WITH_CODE')
+        return ret('UNKNOWN', 'MERCHANT_WITH_CODE')
+
+    # 0b. Credit Builder Payment — extract entity name, strip trailing colon and reference number
     m = re.match(r'^(Credit Builder Payment)\s*:\s*\d+', s, re.IGNORECASE)
     if m: return ret(m.group(1).strip(), 'STANDARD_ACH')
 
@@ -268,17 +370,34 @@ def extract(raw: str, transaction_id=None) -> dict:
     m = re.match(r'^SY\d\s+(.+?)\s+[A-Z]{2,3}\d{4,6},', s)
     if m: return ret(m.group(1).strip(), 'SY_MERCHANT')
 
-    # 11. NNT merchant
+    # 11. NNT merchant — strip store code like S000243, #12000984
     m = re.match(r'^NNT\s+(.+?)\s{2,}\d+,', s)
-    if m: return ret(m.group(1).strip(), 'NNT_MERCHANT')
+    if not m:
+        m = re.match(r'^NST\s+(.+?)(?:,|\s*$)', s)
+    if m:
+        merchant = re.sub(r'\s*[#S]\d{3,}\s*$', '', m.group(1).strip()).strip()
+        merchant = re.sub(r'\s+\d{4,}\s*$', '', merchant).strip()
+        return ret(merchant, 'NNT_MERCHANT')
+
+    # 11b. SP (ShopPay/Stripe) merchant — "SP MR LOCK, 178-64721235, DE 19709 US"
+    m = re.match(r'^SP\s+(.+?)(?:,|$)', s)
+    if m: return ret(strip_location(strip_noise(m.group(1).strip())), 'MERCHANT_WITH_CODE')
 
     # 12. SQ merchant
     m = re.match(r'^SQ \*(.+?)(?:,|$)', s)
     if m: return ret(strip_location(m.group(1).strip()), 'SQUARE_MERCHANT')
 
-    # 13. TPG Products
-    if re.match(r'^TPG PRODUCTS', s, re.IGNORECASE):
+    # 13. TPG Products / Tax Products / SBTPG
+    if re.match(r'^(TPG PRODUCTS|TAX PRODUCTS)', s, re.IGNORECASE):
         return ret('TPG PRODUCTS SBTPG LLC', 'TAX_REFUND_PROCESSOR')
+
+    # 13a. INTUIT TURBOTAX — extract just "INTUIT TURBOTAX"
+    if re.match(r'^INTUIT\s+TURBOTAX', s, re.IGNORECASE):
+        return ret('INTUIT TURBOTAX', 'TAX_REFUND_PROCESSOR')
+
+    # 13b. WM SUPERCENTER / Walmart POS
+    if re.match(r'^WM\s+SUPERCENTER', s, re.IGNORECASE):
+        return ret('WALMART', 'WALMART_VARIANT')
 
     # 14. TARGET DEBIT CRD ACH TRAN
     if re.match(r'^TARGET DEBIT CRD ACH TRAN', s, re.IGNORECASE):
@@ -332,7 +451,7 @@ def extract(raw: str, transaction_id=None) -> dict:
     # 26. Government
     for gov in GOV_PATTERNS:
         if re.match(gov, s, re.IGNORECASE):
-            agency = re.split(r'\s+[A-Z]+REFUNDS?\b|\s+TAXREFUNDS?\b|\s+UNEMP\b|\s+DE DOR\b|\s+BENEFITS\b|\s+CHILDCTC\b|\s+TAX REF\b', s, flags=re.IGNORECASE)[0]
+            agency = re.split(r'\s+[A-Z]*REFUNDS?\b|\s+TAXREFUNDS?\b|\s+UNEMP\b|\s+DE DOR\b|\s+BENEFITS\b|\s+CHILDCTC\b|\s+TAX REF(?:UND)?\b|\s+WITHDRAWAL\b|\s+[A-Z]*STTAXRFD\b', s, flags=re.IGNORECASE)[0]
             return ret(strip_noise(agency.strip()), 'GOVERNMENT_PAYMENT')
 
     # 27. POS / DDA
@@ -356,6 +475,9 @@ def extract(raw: str, transaction_id=None) -> dict:
         if is_rail and not is_merchant:
             after_clean = re.sub(r',.*$', '', after).strip()
             after_clean = strip_noise(after_clean).split('*')[0].strip()
+            # DK*DRAFTKINGS variant codes — normalize to DRAFTKINGS
+            if eu.startswith('DK') and re.match(r'^DRAFTKINGS', after_clean, re.IGNORECASE):
+                return ret('DRAFTKINGS', 'PAYMENT_RAIL')
             return ret(after_clean if after_clean else entity_before, 'PAYMENT_RAIL')
         else:
             return ret(strip_noise(entity_before), 'MERCHANT_WITH_CODE')
@@ -364,6 +486,14 @@ def extract(raw: str, transaction_id=None) -> dict:
     m = re.match(r'^(.+?)\s+(FUND PMTS|PAYABLES|PMT REFUND|ACCTVERIFY)\b', s, re.IGNORECASE)
     if m: return ret(strip_noise(m.group(1).strip()), 'STANDARD_ACH')
     m = re.match(r'^(.+?)\s+(?:EFT|ACH)\d*\s*$', s, re.IGNORECASE)
+    if m: return ret(strip_noise(m.group(1).strip()), 'STANDARD_ACH')
+
+    # 29b. Credit card / web payments: "COMPANY WEB PYMT PERSON REF"
+    m = re.match(r'^(.+?)\s+(WEB PYMT|WEB PMT|EPAY|INTERNET|INS PREM|LOAN PYMNT?)\b', s, re.IGNORECASE)
+    if m: return ret(strip_noise(m.group(1).strip()), 'STANDARD_ACH')
+
+    # 29c. BILT/rent payments, fintech patterns: "BILT PAYMENT BILTRENT Name Code"
+    m = re.match(r'^(.+?)\s+(BILTRENT|SMARTPAY|AUTOPAY)\b', s, re.IGNORECASE)
     if m: return ret(strip_noise(m.group(1).strip()), 'STANDARD_ACH')
 
     # 30. Fallback
