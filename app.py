@@ -474,9 +474,18 @@ def extract(raw: str, transaction_id=None) -> dict:
 
     # 27. POS / DDA
     if re.match(r'^POS\s+(Debit|Pre-Authorized|Recurring)', s, re.IGNORECASE):
+        # Format A: "POS Debit - DDA POS DEB 1154 07/28/23 00215197MERCHANT..."
         m2 = re.search(r'\d{8}([A-Za-z][A-Za-z0-9\s\'\-&#*]+?)(?:\s+\d|\s+[A-Z]{2}\s|\s+C#|\s*$)', s)
         if m2:
             merchant = re.sub(r'\s+(DG|DF|FA|WV|TX|CA|PA|NC|FL|GA|OH|IN|MO|IL|TN|NY|VA|MD|SC)\s*$', '', m2.group(1).strip()).strip()
+            merchant = strip_noise(merchant)
+            if len(merchant) > 2:
+                return ret(merchant, 'POS_CARD_TRANSACTION')
+        # Format B: "POS Debit - DDA                WAL-MART #1544 550 EMILY DR CLARKSBURG   WV US"
+        # Large whitespace gap, then merchant + address directly
+        m3 = re.match(r'^POS\s+(?:Debit|Pre-Authorized|Recurring)\s*-\s*DDA\s{2,}([A-Za-z][A-Za-z0-9\s\'\-&#*]+?)(?:\s+\d{3,}|\s{2,}[A-Z]{2}\s|\s*$)', s, re.IGNORECASE)
+        if m3:
+            merchant = strip_location(m3.group(1).strip())
             merchant = strip_noise(merchant)
             if len(merchant) > 2:
                 return ret(merchant, 'POS_CARD_TRANSACTION')
