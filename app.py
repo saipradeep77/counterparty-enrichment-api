@@ -352,9 +352,9 @@ def extract(raw: str, transaction_id=None) -> dict:
             entity = m2.group(1).strip()
             # Wire strings end with: ENTITY_NAME  ROUTING_NUMBER BANKCODE
             # Strip trailing routing number (9 digits) and short bank codes
+            # Strip routing number (9 digits) + bank code in one pass
             entity = re.sub(r'\s+\d{9,}\s+\S+\s*$', '', entity).strip()
             entity = re.sub(r'\s+\d{6,}\s*$', '', entity).strip()
-            entity = re.sub(r'\s+[A-Z]{4,10}\s*$', '', entity).strip()
             entity = strip_noise(entity)
         else:
             entity = 'UNKNOWN'
