@@ -93,36 +93,7 @@ input[type=text]:focus{border-color:var(--blue);background:#fff}
 .sample-link:hover{text-decoration:underline}
 .upload-stats{font-size:.7rem;color:var(--text2);font-family:var(--mono);line-height:1.6}
 
-/* Pillar / Hero section */
-.pillar{background:var(--text);color:#fff;padding:2.5rem 2rem 2rem;border-bottom:1px solid rgba(255,255,255,.08)}
-.pillar-inner{max-width:960px;margin:0 auto}
-.pillar h2{font-size:1.5rem;font-weight:600;margin-bottom:.6rem;letter-spacing:-.02em}
-.pillar p{font-size:.85rem;color:rgba(255,255,255,.65);line-height:1.7;max-width:700px}
-.pillar-stats{display:flex;gap:2rem;margin-top:1.2rem;flex-wrap:wrap}
-.pillar-stat{display:flex;flex-direction:column;gap:.15rem}
-.pillar-stat .ps-num{font-size:1.3rem;font-weight:600;font-family:var(--mono);color:var(--blue);background:rgba(26,79,214,.12);padding:.1rem .5rem;border-radius:4px;display:inline-block}
-.pillar-stat .ps-label{font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.4);font-weight:500}
-.pillar-caps{display:flex;gap:.6rem;margin-top:1.2rem;flex-wrap:wrap}
-.pillar-cap{font-size:.68rem;padding:.3rem .7rem;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:4px;color:rgba(255,255,255,.55)}
-
-/* Footer */
-footer{background:var(--text);color:rgba(255,255,255,.5);padding:2rem 2rem 1.5rem;border-top:1px solid rgba(255,255,255,.08)}
-.footer-inner{max-width:960px;margin:0 auto;display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:2rem}
-.footer-col h4{font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:rgba(255,255,255,.3);margin-bottom:.6rem;font-weight:600}
-.footer-col p,.footer-col li{font-size:.75rem;line-height:1.7;color:rgba(255,255,255,.45)}
-.footer-col ul{list-style:none;padding:0}
-.footer-col li{margin-bottom:.2rem}
-.footer-col a{color:rgba(255,255,255,.55);text-decoration:none}
-.footer-col a:hover{color:#fff}
-.footer-bottom{max-width:960px;margin:1.2rem auto 0;padding-top:1rem;border-top:1px solid rgba(255,255,255,.06);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem}
-.footer-bottom p{font-size:.65rem;color:rgba(255,255,255,.25)}
-.footer-badge{font-size:.6rem;padding:.2rem .5rem;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:3px;color:rgba(255,255,255,.3);font-family:var(--mono)}
-
-@media(max-width:780px){
-  .layout{grid-template-columns:1fr}.left{border-right:none;border-bottom:1px solid var(--border)}
-  .footer-inner{grid-template-columns:1fr 1fr}
-  .pillar-stats{gap:1rem}
-}
+@media(max-width:780px){.layout{grid-template-columns:1fr}.left{border-right:none;border-bottom:1px solid var(--border)}}
 </style>
 </head>
 <body>
@@ -130,29 +101,6 @@ footer{background:var(--text);color:rgba(255,255,255,.5);padding:2rem 2rem 1.5re
   <h1>Counterparty Extraction</h1>
   <span class="ver">v3.0.0 · 30 patterns · whitelist + exclusion list loaded</span>
 </header>
-<div class="pillar">
-  <div class="pillar-inner">
-    <h2>Counterparty Extraction &amp; Enrichment</h2>
-    <p>A pattern-based engine that extracts clean counterparty names from raw NACHA, Helix, and Silverlake transaction descriptions. Identifies 30+ transaction patterns, classifies entities as Business or Individual, and checks against whitelist and exclusion lists for instant disposition.</p>
-    <div class="pillar-stats">
-      <div class="pillar-stat"><span class="ps-num" id="statPatterns">30+</span><span class="ps-label">Patterns</span></div>
-      <div class="pillar-stat"><span class="ps-num" id="statWhitelist">18,740</span><span class="ps-label">Whitelist Aliases</span></div>
-      <div class="pillar-stat"><span class="ps-num" id="statExclusion">244</span><span class="ps-label">Exclusion Terms</span></div>
-      <div class="pillar-stat"><span class="ps-num">99.4%</span><span class="ps-label">Clean Extraction Rate</span></div>
-    </div>
-    <div class="pillar-caps">
-      <span class="pillar-cap">NACHA Descriptions</span>
-      <span class="pillar-cap">Helix Returns &amp; Transfers</span>
-      <span class="pillar-cap">Silverlake POS/DDA</span>
-      <span class="pillar-cap">ACH Credit/Debit</span>
-      <span class="pillar-cap">Wire Transfers (IMAD/OMAD)</span>
-      <span class="pillar-cap">Payment Rails (Cash App, Venmo, PayPal)</span>
-      <span class="pillar-cap">Payroll &amp; Direct Deposit</span>
-      <span class="pillar-cap">Government Payments</span>
-      <span class="pillar-cap">Bulk File Upload (.xlsx / .csv)</span>
-    </div>
-  </div>
-</div>
 <div class="layout">
   <div class="left">
     <div>
@@ -307,12 +255,6 @@ async function go(){
 }
 document.getElementById('desc').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey))go();});
 
-// Load live stats into pillar
-fetch('/health').then(r=>r.json()).then(d=>{
-  if(d.whitelist_aliases) document.getElementById('statWhitelist').textContent=d.whitelist_aliases.toLocaleString();
-  if(d.exclusion_terms) document.getElementById('statExclusion').textContent=d.exclusion_terms.toLocaleString();
-}).catch(()=>{});
-
 // ─── Bulk Upload ───
 const dropZone=document.getElementById('dropZone');
 const fileInput=document.getElementById('fileInput');
@@ -370,51 +312,5 @@ function showUploadError(msg){
   uploadResult.innerHTML=`<div class="err">${msg}</div>`;
 }
 </script>
-
-<footer>
-  <div class="footer-inner">
-    <div class="footer-col">
-      <h4>About</h4>
-      <p>Counterparty Extraction &amp; Enrichment is a regex-based, non-LLM engine designed for AML/KYC transaction monitoring. It processes raw banking transaction descriptions to extract clean counterparty names, classify entity types, and check against configurable whitelist and exclusion lists. Built for integration into the counterparty pipeline alongside adverse media monitoring and case investigation workflows.</p>
-    </div>
-    <div class="footer-col">
-      <h4>Capabilities</h4>
-      <ul>
-        <li>30+ NACHA/Helix/Silverlake patterns</li>
-        <li>Business vs Individual classification</li>
-        <li>Whitelist matching (contains, case-insensitive)</li>
-        <li>Exclusion list (exact + regex)</li>
-        <li>Bulk file processing (.xlsx / .csv)</li>
-        <li>REST API (/extract, /upload)</li>
-        <li>Government agency auto-exclusion</li>
-      </ul>
-    </div>
-    <div class="footer-col">
-      <h4>API Endpoints</h4>
-      <ul>
-        <li><a href="/health">/health</a> — Service status</li>
-        <li><a href="/stats">/stats</a> — List versions &amp; counts</li>
-        <li>/extract — POST single or batch</li>
-        <li>/upload — POST file for enrichment</li>
-        <li><a href="/sample">/sample</a> — Download sample file</li>
-      </ul>
-    </div>
-    <div class="footer-col">
-      <h4>Data Sources</h4>
-      <ul>
-        <li>Whitelist v8 (01 Apr 2026)</li>
-        <li>Exclusion List v9 (01 Apr 2026)</li>
-        <li>NAICS Industry Classification</li>
-        <li>Cross-Industry Risk Matrix</li>
-        <li>18,740+ known entity aliases</li>
-        <li>244+ exclusion terms &amp; regex</li>
-      </ul>
-    </div>
-  </div>
-  <div class="footer-bottom">
-    <p>Counterparty Extraction Engine v3.0.0 — Pattern-based, non-LLM, deterministic. No transaction data is stored or logged.</p>
-    <span class="footer-badge">Python 3.12 / Flask / Gunicorn</span>
-  </div>
-</footer>
 </body>
 </html>
